@@ -9,8 +9,8 @@ import time
 from datetime import date
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
-
 import requests
+
 RAW = "data/raw"
 MANIFEST = "data/manifest.csv"
 HEADERS = {"User-Agent": "ExamateStudentProject/1.0 (learning project; contact: your-email@example.com)"}
