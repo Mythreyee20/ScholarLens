@@ -9,6 +9,7 @@ import time
 from datetime import date
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
+
 import requests
 RAW = "data/raw"
 MANIFEST = "data/manifest.csv"
