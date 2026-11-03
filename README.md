@@ -41,4 +41,4 @@ curl localhost:8000/health
 ```
 
 ## Live link
-https://scholarlens-67fg.onrender.com
+https://scholarlens-67fg.onrender.com/health
