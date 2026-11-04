@@ -1,5 +1,6 @@
 
 from google import genai
+from google.genai import types
 from groq import Groq
 
 from app.config import get_settings
@@ -21,17 +22,26 @@ class LLMService:
         settings = get_settings()
 
         self.gemini = genai.Client(
-            api_key=settings.gemini_api_key
+            api_key=settings.gemini_api_key,
+            http_options=types.HttpOptions(timeout=30000),
         )
 
         self.groq = Groq(
-            api_key=settings.groq_api_key
+            api_key=settings.groq_api_key,
+            timeout=30.0,
+            max_retries=2,
         )
 
     @classmethod
-    def record_usage(cls, provider, model, input_tokens, output_tokens,
-                     input_rate, output_rate):
-
+    def record_usage(
+        cls,
+        provider,
+        model,
+        input_tokens,
+        output_tokens,
+        input_rate,
+        output_rate,
+    ):
         cost = (
             input_tokens * input_rate
             + output_tokens * output_rate
@@ -105,4 +115,40 @@ class LLMService:
 
         except Exception as error:
             print(f"Groq failed: {error}")
+            raise RuntimeError("Both LLM providers failed.") from error
+
+    def stream_generate(self, prompt: str):
+
+        # Primary provider: Gemini
+        try:
+            for chunk in self.gemini.models.generate_content_stream(
+                model="gemini-3.8-flash",
+                contents=prompt,
+            ):
+                if chunk.text:
+                    yield chunk.text
+
+            return
+
+        except Exception as error:
+            print(f"Gemini streaming failed: {error}")
+
+        # Fallback provider: Groq
+        try:
+            stream = self.groq.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                stream=True,
+            )
+
+            for chunk in stream:
+                content = chunk.choices[0].delta.content
+
+                if content:
+                    yield content
+
+        except Exception as error:
+            print(f"Groq streaming failed: {error}")
             raise RuntimeError("Both LLM providers failed.") from error

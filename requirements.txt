@@ -4,3 +4,4 @@ pydantic-settings>=2.4
 requests>=2.34.2
 google-genai>=1.0.0
 groq>=0.9.0
+pypdf
