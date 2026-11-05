@@ -23,7 +23,7 @@ class LLMService:
 
         self.gemini = genai.Client(
             api_key=settings.gemini_api_key,
-            http_options=types.HttpOptions(timeout=30000),
+            http_options=types.HttpOptions(timeout=120000),
         )
 
         self.groq = Groq(
@@ -115,40 +115,96 @@ class LLMService:
 
         except Exception as error:
             print(f"Groq failed: {error}")
-            raise RuntimeError("Both LLM providers failed.") from error
+            raise RuntimeError(
+                "Both LLM providers failed."
+            ) from error
 
     def stream_generate(self, prompt: str):
 
-        # Primary provider: Gemini
+        # Primary provider: Gemini streaming
+        generated_text = False
+
         try:
-            for chunk in self.gemini.models.generate_content_stream(
+            input_tokens = 0
+            output_tokens = 0
+
+            stream = self.gemini.models.generate_content_stream(
                 model="gemini-3.8-flash",
                 contents=prompt,
-            ):
+            )
+
+            for chunk in stream:
                 if chunk.text:
+                    generated_text = True
                     yield chunk.text
+
+                metadata = chunk.usage_metadata
+
+                if metadata:
+                    input_tokens = (
+                        metadata.prompt_token_count or input_tokens
+                    )
+                    output_tokens = (
+                        metadata.candidates_token_count or output_tokens
+                    )
+
+            self.record_usage(
+                "Gemini",
+                "gemini-3.8-flash",
+                input_tokens,
+                output_tokens,
+                0.75,
+                3.75,
+            )
 
             return
 
         except Exception as error:
             print(f"Gemini streaming failed: {error}")
 
-        # Fallback provider: Groq
+            # Do not restart with Groq after sending partial text.
+            if generated_text:
+                raise RuntimeError(
+                    "Gemini streaming failed after partial output."
+                ) from error
+
+        # Fallback provider: Groq streaming
         try:
+            input_tokens = 0
+            output_tokens = 0
+
             stream = self.groq.chat.completions.create(
                 model="openai/gpt-oss-120b",
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
                 stream=True,
+                
             )
 
             for chunk in stream:
-                content = chunk.choices[0].delta.content
 
-                if content:
-                    yield content
+                if chunk.usage:
+                    input_tokens = chunk.usage.prompt_tokens or 0
+                    output_tokens = chunk.usage.completion_tokens or 0
+
+                if chunk.choices:
+                    content = chunk.choices[0].delta.content
+
+                    if content:
+                        yield content
+
+            self.record_usage(
+                "Groq",
+                "openai/gpt-oss-120b",
+                input_tokens,
+                output_tokens,
+                0.15,
+                0.60,
+            )
 
         except Exception as error:
             print(f"Groq streaming failed: {error}")
-            raise RuntimeError("Both LLM providers failed.") from error
+            raise RuntimeError(
+                "Both LLM providers failed."
+            ) from error
