@@ -7,3 +7,17 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=3)
+
+
+class Citation(BaseModel):
+    document: str
+    page: int
+
+
+class AskResponse(BaseModel):
+    answer: str
+    citations: list[Citation]
