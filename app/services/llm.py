@@ -1,4 +1,7 @@
 
+import os
+
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from groq import Groq
@@ -6,7 +9,14 @@ from groq import Groq
 from app.config import get_settings
 
 
+load_dotenv()
+
+
 class LLMService:
+
+    # Set LLM_PROVIDER=groq for faster evaluation.
+    # Set LLM_PROVIDER=auto to use Gemini first, then Groq.
+    PROVIDER_MODE = os.getenv("LLM_PROVIDER", "groq").lower()
 
     usage = {
         "total_requests": 0,
@@ -21,10 +31,13 @@ class LLMService:
     def __init__(self):
         settings = get_settings()
 
-        self.gemini = genai.Client(
-            api_key=settings.gemini_api_key,
-            http_options=types.HttpOptions(timeout=120000),
-        )
+        self.gemini = None
+
+        if self.PROVIDER_MODE != "groq":
+            self.gemini = genai.Client(
+                api_key=settings.gemini_api_key,
+                http_options=types.HttpOptions(timeout=30000),
+            )
 
         self.groq = Groq(
             api_key=settings.groq_api_key,
@@ -61,34 +74,35 @@ class LLMService:
 
     def generate(self, prompt: str) -> str:
 
-        # Primary provider: Gemini
-        try:
-            response = self.gemini.models.generate_content(
-                model="gemini-3.8-flash",
-                contents=prompt,
-            )
-
-            if response.text:
-                metadata = response.usage_metadata
-
-                input_tokens = metadata.prompt_token_count or 0
-                output_tokens = metadata.candidates_token_count or 0
-
-                self.record_usage(
-                    "Gemini",
-                    "gemini-3.8-flash",
-                    input_tokens,
-                    output_tokens,
-                    0.75,
-                    3.75,
+        # Gemini primary provider (only in auto mode)
+        if self.gemini is not None:
+            try:
+                response = self.gemini.models.generate_content(
+                    model="gemini-3.8-flash",
+                    contents=prompt,
                 )
 
-                return response.text
+                if response.text:
+                    metadata = response.usage_metadata
 
-        except Exception as error:
-            print(f"Gemini failed: {error}")
+                    input_tokens = metadata.prompt_token_count or 0
+                    output_tokens = metadata.candidates_token_count or 0
 
-        # Fallback provider: Groq
+                    self.record_usage(
+                        "Gemini",
+                        "gemini-3.8-flash",
+                        input_tokens,
+                        output_tokens,
+                        0.75,
+                        3.75,
+                    )
+
+                    return response.text
+
+            except Exception as error:
+                print(f"Gemini failed: {error}")
+
+        # Groq provider
         try:
             response = self.groq.chat.completions.create(
                 model="openai/gpt-oss-120b",
@@ -116,59 +130,59 @@ class LLMService:
         except Exception as error:
             print(f"Groq failed: {error}")
             raise RuntimeError(
-                "Both LLM providers failed."
+                "LLM generation failed."
             ) from error
 
     def stream_generate(self, prompt: str):
 
-        # Primary provider: Gemini streaming
-        generated_text = False
+        # Gemini streaming (only in auto mode)
+        if self.gemini is not None:
+            generated_text = False
 
-        try:
-            input_tokens = 0
-            output_tokens = 0
+            try:
+                input_tokens = 0
+                output_tokens = 0
 
-            stream = self.gemini.models.generate_content_stream(
-                model="gemini-3.8-flash",
-                contents=prompt,
-            )
+                stream = self.gemini.models.generate_content_stream(
+                    model="gemini-3.8-flash",
+                    contents=prompt,
+                )
 
-            for chunk in stream:
-                if chunk.text:
-                    generated_text = True
-                    yield chunk.text
+                for chunk in stream:
+                    if chunk.text:
+                        generated_text = True
+                        yield chunk.text
 
-                metadata = chunk.usage_metadata
+                    metadata = chunk.usage_metadata
 
-                if metadata:
-                    input_tokens = (
-                        metadata.prompt_token_count or input_tokens
-                    )
-                    output_tokens = (
-                        metadata.candidates_token_count or output_tokens
-                    )
+                    if metadata:
+                        input_tokens = (
+                            metadata.prompt_token_count or input_tokens
+                        )
+                        output_tokens = (
+                            metadata.candidates_token_count or output_tokens
+                        )
 
-            self.record_usage(
-                "Gemini",
-                "gemini-3.8-flash",
-                input_tokens,
-                output_tokens,
-                0.75,
-                3.75,
-            )
+                self.record_usage(
+                    "Gemini",
+                    "gemini-3.8-flash",
+                    input_tokens,
+                    output_tokens,
+                    0.75,
+                    3.75,
+                )
 
-            return
+                return
 
-        except Exception as error:
-            print(f"Gemini streaming failed: {error}")
+            except Exception as error:
+                print(f"Gemini streaming failed: {error}")
 
-            # Do not restart with Groq after sending partial text.
-            if generated_text:
-                raise RuntimeError(
-                    "Gemini streaming failed after partial output."
-                ) from error
+                if generated_text:
+                    raise RuntimeError(
+                        "Gemini streaming failed after partial output."
+                    ) from error
 
-        # Fallback provider: Groq streaming
+        # Groq streaming
         try:
             input_tokens = 0
             output_tokens = 0
@@ -179,11 +193,10 @@ class LLMService:
                     {"role": "user", "content": prompt}
                 ],
                 stream=True,
-                
+                stream_options={"include_usage": True},
             )
 
             for chunk in stream:
-
                 if chunk.usage:
                     input_tokens = chunk.usage.prompt_tokens or 0
                     output_tokens = chunk.usage.completion_tokens or 0
@@ -206,5 +219,5 @@ class LLMService:
         except Exception as error:
             print(f"Groq streaming failed: {error}")
             raise RuntimeError(
-                "Both LLM providers failed."
+                "Groq generation failed."
             ) from error

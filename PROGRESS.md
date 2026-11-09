@@ -21,9 +21,9 @@ Commit after every class. Tag every Friday: `git tag week-N && git push origin w
 ## Week 3 (tag week-3 by Fri 6 Nov)
 - [x] Parser keeps page numbers and headings
 - [x] 500+ pages chunked, embedded and stored in pgvector
-- [ ] POST /ask answers with [document, page] citations
-- [ ] docs/EVAL_v0.md with my 10 questions scored
-- [ ] Tag week-3 pushed
+- [x] POST /ask answers with [document, page] citations
+- [x] docs/EVAL_v0.md with my 10 questions scored
+- [x] Tag week-3 pushed
 
 ## Daily log
 | Date | What I did today | Commit |
