@@ -28,6 +28,10 @@ Commit after every class. Tag every Friday: `git tag week-N && git push origin w
 ## Daily log
 | Date | What I did today | Commit |
 |---|---|---|
+2026-11-09 | Add Week 3 scholarship RAG evaluation | 9fa68a2
+2026-11-08 | Updated | c55da2b
+2026-11-07 | Updated for week 3 | 1479cd6
+2026-11-06 | Updated | 20fa6d4
 2026-11-05 | Updated fallback | 5749fff
 2026-11-04 | Updated | 947a8f2
 2026-11-03 | Updated | 6808762
@@ -36,5 +40,3 @@ Commit after every class. Tag every Friday: `git tag week-N && git push origin w
 2026-10-23 | updated | 4c81f1d
 2026-10-23 | Updated | 8d889c9
 2026-10-23 | Set up ScholarLens data collection | 8345a10
-2026-10-21 | Add ScholarLens README and real-world questions | 23d1b92
-2026-10-21 | Initial commit | 8c53d93
