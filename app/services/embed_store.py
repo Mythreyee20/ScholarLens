@@ -1,3 +1,4 @@
+
 import os
 import hashlib
 
@@ -14,7 +15,7 @@ MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 BATCH_SIZE = 32
 
 
-def main():
+def main(pdf_folder=PDF_FOLDER, client_id=None):
     load_dotenv()
 
     database_url = os.getenv("DATABASE_URL")
@@ -22,16 +23,21 @@ def main():
         raise ValueError("DATABASE_URL missing in .env file")
 
     print("1. Loading PDF files...")
-    pages = extract_folder(PDF_FOLDER)
+    pages = extract_folder(pdf_folder)
 
     print("\n2. Creating chunks...")
     chunks = chunk_pages(pages, chunk_size=1000, overlap=150)
     print(f"Total chunks: {len(chunks)}")
 
+    if not chunks:
+        print("No PDF chunks found.")
+        return
+
     print("\n3. Loading embedding model...")
     model = SentenceTransformer(MODEL_NAME)
 
     print("\n4. Connecting to PostgreSQL...")
+
     with psycopg.connect(database_url) as conn:
         register_vector(conn)
 
@@ -40,11 +46,19 @@ def main():
                 ALTER TABLE scholarship_chunks
                 ADD COLUMN IF NOT EXISTS content_hash TEXT;
             """)
+
+            cur.execute("""
+                ALTER TABLE scholarship_chunks
+                ADD COLUMN IF NOT EXISTS client_id BIGINT
+                REFERENCES clients(id);
+            """)
+
             cur.execute("""
                 CREATE UNIQUE INDEX IF NOT EXISTS
                 idx_scholarship_chunks_hash
                 ON scholarship_chunks (content_hash);
             """)
+
         conn.commit()
 
         print("\n5. Generating embeddings and saving in batches...")
@@ -66,10 +80,18 @@ def main():
             rows = []
 
             for item, embedding in zip(batch, embeddings):
-                unique_text = (
-                    f'{item["document"]}|{item["page"]}|'
-                    f'{item["chunk_text"]}'
-                )
+
+                if client_id is None:
+                    unique_text = (
+                        f'{item["document"]}|{item["page"]}|'
+                        f'{item["chunk_text"]}'
+                    )
+                else:
+                    unique_text = (
+                        f'{client_id}|{item["document"]}|'
+                        f'{item["page"]}|{item["chunk_text"]}'
+                    )
+
                 content_hash = hashlib.sha256(
                     unique_text.encode("utf-8")
                 ).hexdigest()
@@ -81,13 +103,22 @@ def main():
                     item["chunk_text"],
                     embedding.tolist(),
                     content_hash,
+                    client_id,
                 ))
 
             with conn.cursor() as cur:
                 cur.executemany("""
                     INSERT INTO scholarship_chunks
-                    (document, page, headings, chunk_text, embedding, content_hash)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    (
+                        document,
+                        page,
+                        headings,
+                        chunk_text,
+                        embedding,
+                        content_hash,
+                        client_id
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (content_hash) DO NOTHING;
                 """, rows)
 

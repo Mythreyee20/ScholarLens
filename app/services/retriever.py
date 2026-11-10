@@ -1,3 +1,4 @@
+
 import os
 from functools import lru_cache
 
@@ -18,7 +19,13 @@ def get_embedding_model():
 
 class RetrieverService:
 
-    def retrieve(self, question: str, limit: int = 5) -> list[dict]:
+    def retrieve(
+        self,
+        question: str,
+        limit: int = 5,
+        client_id: int = None,
+    ) -> list[dict]:
+
         load_dotenv()
 
         database_url = os.getenv("DATABASE_URL")
@@ -41,17 +48,78 @@ class RetrieverService:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
+                        WITH vector_results AS (
+                            SELECT
+                                id,
+                                ROW_NUMBER() OVER (
+                                    ORDER BY embedding <=> (%s)::vector
+                                ) AS rank
+                            FROM scholarship_chunks
+                            WHERE embedding IS NOT NULL
+                            AND (client_id IS NULL OR client_id = %s)
+                            LIMIT 30
+                        ),
+                        keyword_results AS (
+                            SELECT
+                                id,
+                                ROW_NUMBER() OVER (
+                                    ORDER BY ts_rank_cd(
+                                        to_tsvector(
+                                            'english',
+                                            coalesce(document, '') || ' ' ||
+                                            coalesce(array_to_string(headings, ' '), '') || ' ' ||
+                                            coalesce(chunk_text, '')
+                                        ),
+                                        websearch_to_tsquery('english', %s)
+                                    ) DESC
+                                ) AS rank
+                            FROM scholarship_chunks
+                            WHERE (client_id IS NULL OR client_id = %s)
+                            AND to_tsvector(
+                                'english',
+                                coalesce(document, '') || ' ' ||
+                                coalesce(array_to_string(headings, ' '), '') || ' ' ||
+                                coalesce(chunk_text, '')
+                            ) @@ websearch_to_tsquery('english', %s)
+                            LIMIT 30
+                        ),
+                        combined_results AS (
+                            SELECT
+                                id,
+                                SUM(score) AS combined_score
+                            FROM (
+                                SELECT
+                                    id,
+                                    1.0 / (60 + rank) AS score
+                                FROM vector_results
+
+                                UNION ALL
+
+                                SELECT
+                                    id,
+                                    1.0 / (60 + rank) AS score
+                                FROM keyword_results
+                            ) results
+                            GROUP BY id
+                        )
                         SELECT
-                            document,
-                            page,
-                            headings,
-                            chunk_text
-                        FROM scholarship_chunks
-                        WHERE embedding IS NOT NULL
-                        ORDER BY embedding <=> (%s)::vector
+                            s.document,
+                            s.page,
+                            s.headings,
+                            s.chunk_text
+                        FROM combined_results c
+                        JOIN scholarship_chunks s ON s.id = c.id
+                        ORDER BY c.combined_score DESC
                         LIMIT %s;
                         """,
-                        (str(query_embedding), limit),
+                        (
+                            str(query_embedding),
+                            client_id,
+                            question,
+                            client_id,
+                            question,
+                            limit,
+                        ),
                     )
 
                     rows = cur.fetchall()
@@ -68,5 +136,5 @@ class RetrieverService:
 
         except Exception as error:
             raise RuntimeError(
-                f"Document retrieval failed: {error}"
+                f"Hybrid document retrieval failed: {error}"
             ) from error

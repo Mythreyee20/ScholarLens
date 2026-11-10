@@ -1,3 +1,4 @@
+
 services:
   api:
     build: .
@@ -6,8 +7,30 @@ services:
       - "8000:8000"
     depends_on:
       - db
+      - redis
     env_file:
       - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://postgres:scholarlens_dev@db:5432/scholarlens
+    volumes:
+      - ./data:/app/data
+
+  worker:
+    build: .
+    container_name: scholarlens-worker
+    command: python -m app.worker
+    depends_on:
+      - db
+      - redis
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: postgresql://postgres:scholarlens_dev@db:5432/scholarlens
+    volumes:
+      - ./data:/app/data:ro
+    restart: unless-stopped
 
   db:
     image: pgvector/pgvector:pg16
@@ -20,6 +43,10 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
 
 volumes:
   postgres_data:

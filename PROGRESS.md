@@ -25,6 +25,16 @@ Commit after every class. Tag every Friday: `git tag week-N && git push origin w
 - [x] docs/EVAL_v0.md with my 10 questions scored
 - [x] Tag week-3 pushed
 
+## Week 4 (tag week-4 by Fri 13 Nov)
+- [x] Hybrid search implemented (keyword + vector search)
+- [x] Queue + worker for full dataset ingestion with retries
+- [x] Client registration and login with JWT authentication
+- [x] Protected POST /ask with client-based retrieval filtering
+- [x] /me and /ask endpoints tested successfully
+- [ ] Client data isolation and role-based access verified
+- [ ] Tag week-4 pushed
+
+
 ## Daily log
 | Date | What I did today | Commit |
 |---|---|---|
