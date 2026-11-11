@@ -9,3 +9,5 @@ logs/
 data/raw/
 *.sqlite
 .DS_Store
+.env
+data/client_uploads/
