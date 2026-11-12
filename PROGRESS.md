@@ -31,8 +31,8 @@ Commit after every class. Tag every Friday: `git tag week-N && git push origin w
 - [x] Client registration and login with JWT authentication
 - [x] Protected POST /ask with client-based retrieval filtering
 - [x] /me and /ask endpoints tested successfully
-- [ ] Client data isolation and role-based access verified
-- [ ] Tag week-4 pushed
+- [x] Client data isolation and role-based access verified
+- [] Tag week-4 pushed
 
 
 ## Daily log
