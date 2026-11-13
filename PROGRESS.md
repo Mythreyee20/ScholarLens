@@ -32,7 +32,7 @@ Commit after every class. Tag every Friday: `git tag week-N && git push origin w
 - [x] Protected POST /ask with client-based retrieval filtering
 - [x] /me and /ask endpoints tested successfully
 - [x] Client data isolation and role-based access verified
-- [] Tag week-4 pushed
+- [x] Tag week-4 pushed
 
 
 ## Daily log
